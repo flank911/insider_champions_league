@@ -1,0 +1,70 @@
+version: '3.8'
+services:
+  nginx:
+    build:
+      context: docker/${ENVIRONMENT}/nginx
+    ports:
+      - "8003:80"
+    volumes:
+      - app-data:/app:rw
+      - "./docker/${ENVIRONMENT}/nginx/conf.d:/etc/nginx/conf.d"
+      - "./docker/${ENVIRONMENT}/nginx/log:/var/log/nginx"
+    networks:
+      - internal
+    depends_on:
+      - php-fpm
+
+  php-fpm:
+    build:
+      context: docker/${ENVIRONMENT}/php-fpm
+      args:
+        DOCKER_UID: ${DOCKER_UID}
+        DOCKER_GID: ${DOCKER_GID}
+        DOCKER_USER: ${DOCKER_USER}
+        DOCKER_GROUP: ${DOCKER_GROUP}
+
+    user: ${DOCKER_UID}:${DOCKER_GID}
+    volumes:
+      - app-data:/app:rw
+    depends_on:
+      - mariadb
+    networks:
+      - internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      PHP_IDE_CONFIG: serverName=${IDE_SERVER_NAME}
+      XDEBUG_CONFIG: ${XDEBUG_CONFIG}
+
+  mariadb:
+    build:
+      context: docker/${ENVIRONMENT}/mariadb
+    ports:
+      - "33061:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - app-data:/app
+    networks:
+      - internal
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - MYSQL_USER=${DB_USERNAME}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - MYSQL_ALLOW_EMPTY_PASSWORD=${DB_ALLOW_EMPTY_PASSWORD}
+volumes:
+  mariadb-data:
+  app-data:
+    driver: local
+    driver_opts:
+      type: ${DOCKER_VOLUME_TYPE}
+      o: ${DOCKER_VOLUME_OPTIONS}
+      device: .
+
+networks:
+  internal:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: ${DOCKER_NETWORK}
+          gateway: ${DOCKER_GATEWAY}
